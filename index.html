@@ -1,695 +1,411 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { TrendingUp, Activity, DollarSign, AlertTriangle, RefreshCw, BarChart2, Shield, Crosshair } from 'lucide-react';
 
-const CURRENCY_PAIRS = [
-  { symbol: 'EUR/USD', pipDecimal: 4, flag1: '🇪🇺', flag2: '🇺🇸' },
-  { symbol: 'GBP/USD', pipDecimal: 4, flag1: '🇬🇧', flag2: '🇺🇸' },
-  { symbol: 'USD/JPY', pipDecimal: 2, flag1: '🇺🇸', flag2: '🇯🇵' },
-  { symbol: 'USD/CHF', pipDecimal: 4, flag1: '🇺🇸', flag2: '🇨🇭' },
-  { symbol: 'AUD/USD', pipDecimal: 4, flag1: '🇦🇺', flag2: '🇺🇸' },
-  { symbol: 'USD/CAD', pipDecimal: 4, flag1: '🇺🇸', flag2: '🇨🇦' },
-  { symbol: 'NZD/USD', pipDecimal: 4, flag1: '🇳🇿', flag2: '🇺🇸' },
-  { symbol: 'EUR/GBP', pipDecimal: 4, flag1: '🇪🇺', flag2: '🇬🇧' },
-  { symbol: 'EUR/JPY', pipDecimal: 2, flag1: '🇪🇺', flag2: '🇯🇵' },
-  { symbol: 'GBP/JPY', pipDecimal: 2, flag1: '🇬🇧', flag2: '🇯🇵' },
-  { symbol: 'XAU/USD', pipDecimal: 2, flag1: '🪙', flag2: '🇺🇸' },
-];
-
-const LOT_SIZES = [
-  { name: 'Standard (1.0)', value: 100000, label: '1.0' },
-  { name: 'Mini (0.1)', value: 10000, label: '0.1' },
-  { name: 'Micro (0.01)', value: 1000, label: '0.01' },
-];
-
-const FLOATING_EMOJIS = ['💵', '💶', '💷', '💴', '🪙', '💰', '💳', '🏦', '📈', '📊', '💹', '🤑', '💲', '📉', '🎯', '⚡'];
-
-export default function ForexTradingCalculator() {
-  const [activeTab, setActiveTab] = useState('position');
-  const [emojis, setEmojis] = useState([]);
-  
+const ForexEliteApp = () => {
+  // --- State ---
   const [accountBalance, setAccountBalance] = useState(10000);
-  const [riskPercent, setRiskPercent] = useState(2);
-  const [stopLossPips, setStopLossPips] = useState(50);
-  const [selectedPair, setSelectedPair] = useState(CURRENCY_PAIRS[0]);
-  const [leverage, setLeverage] = useState(100);
-  
-  const [entryPrice, setEntryPrice] = useState(1.0850);
-  const [stopLossPrice, setStopLossPrice] = useState(1.0800);
-  const [takeProfitPrice, setTakeProfitPrice] = useState(1.0950);
-  const [tradeDirection, setTradeDirection] = useState('long');
-  
-  const [plEntryPrice, setPlEntryPrice] = useState(1.0850);
-  const [plExitPrice, setPlExitPrice] = useState(1.0920);
-  const [plLotSize, setPlLotSize] = useState(1.0);
-  const [plDirection, setPlDirection] = useState('long');
-  
-  const [pipLotSize, setPipLotSize] = useState(1.0);
-  
-  const [chartData, setChartData] = useState([]);
-  const canvasRef = useRef(null);
+  const [riskPercentage, setRiskPercentage] = useState(2.0);
+  const [stopLoss, setStopLoss] = useState(20);
+  const [selectedPair, setSelectedPair] = useState('EURUSD');
+  const [exchangeRates, setExchangeRates] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const generated = FLOATING_EMOJIS.map((emoji, i) => ({
-      id: i,
-      emoji,
-      left: Math.random() * 100,
-      top: Math.random() * 100,
-      delay: Math.random() * 5,
-      duration: 15 + Math.random() * 10,
-      size: 20 + Math.random() * 24,
-    }));
-    setEmojis(generated);
-  }, []);
-
-  useEffect(() => {
-    const data = [];
-    let price = 1.0850;
-    for (let i = 0; i < 50; i++) {
-      price += (Math.random() - 0.48) * 0.002;
-      data.push({
-        time: i,
-        open: price,
-        high: price + Math.random() * 0.001,
-        low: price - Math.random() * 0.001,
-        close: price + (Math.random() - 0.5) * 0.001,
-      });
-    }
-    setChartData(data);
-  }, []);
-
-  useEffect(() => {
-    if (!canvasRef.current || chartData.length === 0) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-    
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-    ctx.fillRect(0, 0, width, height);
-    
-    const prices = chartData.flatMap(d => [d.high, d.low]);
-    const minPrice = Math.min(...prices);
-    const maxPrice = Math.max(...prices);
-    const priceRange = maxPrice - minPrice;
-    
-    const candleWidth = width / chartData.length * 0.6;
-    const gap = width / chartData.length;
-    
-    chartData.forEach((candle, i) => {
-      const x = i * gap + gap / 2;
-      const yHigh = height - ((candle.high - minPrice) / priceRange) * height * 0.9 - height * 0.05;
-      const yLow = height - ((candle.low - minPrice) / priceRange) * height * 0.9 - height * 0.05;
-      const yOpen = height - ((candle.open - minPrice) / priceRange) * height * 0.9 - height * 0.05;
-      const yClose = height - ((candle.close - minPrice) / priceRange) * height * 0.9 - height * 0.05;
-      
-      const isBullish = candle.close > candle.open;
-      ctx.strokeStyle = isBullish ? '#22c55e' : '#ef4444';
-      ctx.fillStyle = isBullish ? '#22c55e' : '#ef4444';
-      
-      ctx.beginPath();
-      ctx.moveTo(x, yHigh);
-      ctx.lineTo(x, yLow);
-      ctx.stroke();
-      
-      const candleTop = Math.min(yOpen, yClose);
-      const candleHeight = Math.abs(yOpen - yClose);
-      ctx.fillRect(x - candleWidth / 2, candleTop, candleWidth, Math.max(candleHeight, 1));
-    });
-    
-    ctx.strokeStyle = 'rgba(245, 158, 11, 0.1)';
-    ctx.setLineDash([5, 5]);
-    for (let i = 1; i < 5; i++) {
-      const y = height * i / 5;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-  }, [chartData]);
-
-  const pipValue = selectedPair.pipDecimal === 4 ? 0.0001 : 0.01;
-  
-  const riskAmount = accountBalance * (riskPercent / 100);
-  const pipValuePerLot = selectedPair.pipDecimal === 4 ? 10 : (100000 * 0.01);
-  const positionSize = riskAmount / (stopLossPips * pipValuePerLot);
-  const unitsToTrade = positionSize * 100000;
-  const marginRequired = unitsToTrade / leverage;
-  
-  const riskPips = tradeDirection === 'long' 
-    ? Math.abs(entryPrice - stopLossPrice) / pipValue
-    : Math.abs(stopLossPrice - entryPrice) / pipValue;
-  const rewardPips = tradeDirection === 'long'
-    ? Math.abs(takeProfitPrice - entryPrice) / pipValue
-    : Math.abs(entryPrice - takeProfitPrice) / pipValue;
-  const rrRatio = riskPips > 0 ? rewardPips / riskPips : 0;
-  const breakEvenWinRate = riskPips > 0 ? (riskPips / (riskPips + rewardPips)) * 100 : 0;
-  
-  const plPips = plDirection === 'long'
-    ? (plExitPrice - plEntryPrice) / pipValue
-    : (plEntryPrice - plExitPrice) / pipValue;
-  const profitLoss = plPips * (plLotSize * 100000 * pipValue) * (selectedPair.pipDecimal === 4 ? 1 : 0.01) * 100;
-
-  const tabs = [
-    { id: 'position', label: '📐 Position', shortLabel: 'Position' },
-    { id: 'rr', label: '⚖️ R:R', shortLabel: 'R:R' },
-    { id: 'pip', label: '💰 Pip', shortLabel: 'Pip' },
-    { id: 'pnl', label: '📊 P/L', shortLabel: 'P/L' },
-    { id: 'chart', label: '📈 Chart', shortLabel: 'Chart' },
+  // --- Constants ---
+  const CURRENCY_PAIRS = [
+    { pair: 'EURUSD', base: 'EUR', quote: 'USD', type: 'Major' },
+    { pair: 'GBPUSD', base: 'GBP', quote: 'USD', type: 'Major' },
+    { pair: 'USDJPY', base: 'USD', quote: 'JPY', type: 'Major' },
+    { pair: 'USDCAD', base: 'USD', quote: 'CAD', type: 'Major' },
+    { pair: 'USDCHF', base: 'USD', quote: 'CHF', type: 'Major' },
+    { pair: 'AUDUSD', base: 'AUD', quote: 'USD', type: 'Major' },
+    { pair: 'NZDUSD', base: 'NZD', quote: 'USD', type: 'Major' },
+    { pair: 'EURGBP', base: 'EUR', quote: 'GBP', type: 'Cross' },
+    { pair: 'EURJPY', base: 'EUR', quote: 'JPY', type: 'Cross' },
+    { pair: 'GBPJPY', base: 'GBP', quote: 'JPY', type: 'Cross' },
+    { pair: 'AUDJPY', base: 'AUD', quote: 'JPY', type: 'Cross' },
   ];
 
+  // --- API Fetching ---
+  const fetchRates = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetching based on USD to calculate pip values easier for USD accounts
+      const response = await fetch('https://api.frankfurter.dev/v1/latest?base=USD');
+      if (!response.ok) throw new Error('Failed to fetch rates');
+      const data = await response.json();
+      setExchangeRates(data.rates);
+      setLastUpdated(new Date().toLocaleTimeString());
+    } catch (err) {
+      setError('Market data offline. Please retry.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRates();
+  }, []);
+
+  // --- Calculations ---
+  const calculations = useMemo(() => {
+    if (!exchangeRates || Object.keys(exchangeRates).length === 0) return null;
+
+    const currentPairObj = CURRENCY_PAIRS.find(p => p.pair === selectedPair);
+    if (!currentPairObj) return null;
+
+    const { base, quote } = currentPairObj;
+    
+    // 1. Calculate Pip Value for Standard Lot (100,000 units)
+    let pipValueStandard = 10; // Default for XXX/USD pairs (EURUSD, GBPUSD)
+    let currentRate = 1;
+
+    // Logic for Pip Value based on USD Account
+    if (quote === 'USD') {
+      // EUR/USD: Pip value is fixed at $10 for standard lot
+      pipValueStandard = 10;
+      currentRate = (1 / exchangeRates[base]) || 1; // Approx inverse for display
+    } else if (base === 'USD') {
+      // USD/JPY, USD/CAD: Pip value = $10 / Exchange Rate
+      const rate = exchangeRates[quote];
+      pipValueStandard = 10 / rate;
+      currentRate = rate;
+    } else {
+      // Cross Pairs (e.g. EUR/GBP): Pip Value = $10 * (Quote/USD Rate)
+      // Since we have USD base rates: Quote/USD is 1 / (USD/Quote)
+      // Actually simpler: We need the rate of QuoteCurrency against USD.
+      // If we have USD/GBP = 0.75, then GBP/USD = 1.33.
+      // Pip Value = $10 * (Price of Quote Currency in USD)
+      
+      // Since rates are USD based (e.g. USDGBP = 0.8), price of GBP in USD is 1/0.8
+      const quoteToUSD = 1 / exchangeRates[quote];
+      pipValueStandard = 10 * quoteToUSD;
+      
+      // Approximate cross rate for display
+      const baseToUSD = 1 / exchangeRates[base];
+      currentRate = baseToUSD * exchangeRates[quote]; 
+    }
+
+    // 2. Risk Calculations
+    const riskAmount = accountBalance * (riskPercentage / 100);
+    
+    // 3. Position Size (Lots)
+    // Formula: RiskAmount / (StopLoss * PipValue)
+    let rawLots = 0;
+    if (stopLoss > 0 && pipValueStandard > 0) {
+      rawLots = riskAmount / (stopLoss * pipValueStandard);
+    }
+
+    return {
+      riskAmount,
+      pipValueStandard,
+      standardLots: rawLots,
+      miniLots: rawLots * 10,
+      microLots: rawLots * 100,
+      units: rawLots * 100000,
+      rate: currentRate
+    };
+  }, [accountBalance, riskPercentage, stopLoss, selectedPair, exchangeRates]);
+
+  // --- Helper Components ---
+  
+  const StatCard = ({ label, value, subtext, highlight = false, icon: Icon }) => (
+    <div className={`relative overflow-hidden rounded-2xl p-4 backdrop-blur-md border transition-all duration-300 group
+      ${highlight 
+        ? 'bg-gradient-to-br from-amber-500/20 to-amber-900/40 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.3)]' 
+        : 'bg-slate-800/40 border-slate-700/50 hover:border-slate-600'}`}>
+      <div className="flex justify-between items-start mb-2">
+        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">{label}</span>
+        {Icon && <Icon className={`w-4 h-4 ${highlight ? 'text-amber-400' : 'text-slate-500'}`} />}
+      </div>
+      <div className={`text-2xl font-bold font-mono ${highlight ? 'text-amber-100' : 'text-white'}`}>
+        {value}
+      </div>
+      {subtext && <div className="text-xs text-slate-400 mt-1">{subtext}</div>}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#0f172a] text-white font-sans overflow-x-hidden selection:bg-amber-500/30">
+      {/* --- Styles for Animations & Fonts --- */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap');
         
-        @keyframes float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-20px) rotate(10deg); }
-        }
+        body { font-family: 'Outfit', sans-serif; }
+        h1, h2, .font-display { font-family: 'Bebas Neue', cursive; }
         
-        @keyframes shimmer {
-          0% { background-position: -200% center; }
-          100% { background-position: 200% center; }
+        .glass-panel {
+          background: rgba(30, 41, 59, 0.4);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
         }
-        
-        @keyframes pulse {
-          0%, 100% { opacity: 0.5; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.1); }
-        }
-        
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .shimmer-text {
-          background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b, #fbbf24);
-          background-size: 200% auto;
+
+        .gold-text-shimmer {
+          background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+          background-size: 200%;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
-          background-clip: text;
-          animation: shimmer 3s linear infinite;
+          animation: shimmer 3s infinite linear;
+        }
+
+        @keyframes shimmer {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 100% 50%; }
+        }
+
+        .floating-emoji {
+          position: fixed;
+          pointer-events: none;
+          z-index: 0;
+          animation: floatUp linear infinite;
+          opacity: 0.05;
+          font-size: 24px;
+        }
+
+        @keyframes floatUp {
+          0% { transform: translateY(110vh) rotate(0deg); }
+          100% { transform: translateY(-10vh) rotate(360deg); }
         }
         
-        .glass-card {
-          background: rgba(255,255,255,0.05);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .slide-in {
-          animation: slideIn 0.3s ease;
-        }
-        
-        input:focus {
-          outline: none;
-          box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4);
-        }
-        
-        input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button {
+        .custom-range::-webkit-slider-thumb {
           -webkit-appearance: none;
-          margin: 0;
+          height: 16px;
+          width: 16px;
+          border-radius: 50%;
+          background: #f59e0b;
+          cursor: pointer;
+          margin-top: -6px;
+          box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+        }
+        
+        .custom-range::-webkit-slider-runnable-track {
+          width: 100%;
+          height: 4px;
+          cursor: pointer;
+          background: #334155;
+          border-radius: 2px;
         }
       `}</style>
-      
-      {/* Background Grid */}
-      <div className="absolute inset-0 opacity-30" style={{
-        backgroundImage: `linear-gradient(rgba(245, 158, 11, 0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(245, 158, 11, 0.03) 1px, transparent 1px)`,
-        backgroundSize: '40px 40px'
-      }} />
-      
-      {/* Glowing Orbs */}
-      <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl" style={{ animation: 'pulse 8s ease-in-out infinite' }} />
-      <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl" style={{ animation: 'pulse 8s ease-in-out infinite', animationDelay: '4s' }} />
-      
-      {/* Floating Emojis */}
-      {emojis.map((e) => (
-        <div
-          key={e.id}
-          className="absolute pointer-events-none"
-          style={{
-            left: `${e.left}%`,
-            top: `${e.top}%`,
-            fontSize: `${e.size}px`,
-            opacity: 0.12,
-            animation: `float ${e.duration}s ease-in-out infinite`,
-            animationDelay: `${e.delay}s`,
-          }}
-        >
-          {e.emoji}
+
+      {/* --- Background Effects --- */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        {/* Grid */}
+        <div className="absolute inset-0 opacity-[0.03]" 
+             style={{ backgroundImage: 'linear-gradient(#f59e0b 1px, transparent 1px), linear-gradient(90deg, #f59e0b 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
         </div>
-      ))}
-      
-      {/* Main Content */}
-      <div className="relative z-10 max-w-md mx-auto p-4 pb-8">
+        {/* Orbs */}
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-amber-600/20 rounded-full blur-[100px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-slate-800/30 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-blue-900/20 rounded-full blur-[100px]" />
+        
+        {/* Floating Emojis */}
+        {[...Array(15)].map((_, i) => (
+          <div key={i} className="floating-emoji" style={{
+            left: `${Math.random() * 100}vw`,
+            animationDuration: `${15 + Math.random() * 20}s`,
+            animationDelay: `-${Math.random() * 20}s`,
+            fontSize: `${20 + Math.random() * 30}px`
+          }}>
+            {['💵','📈','📊','💰','💹','💎','🐂','🐻'][Math.floor(Math.random() * 8)]}
+          </div>
+        ))}
+      </div>
+
+      {/* --- Main Content --- */}
+      <div className="relative z-10 max-w-6xl mx-auto px-4 py-6 md:py-10">
+        
         {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-5xl tracking-wider mb-1" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-            <span className="shimmer-text">FOREX</span>
-            <span className="text-white ml-2">ELITE</span>
-          </h1>
-          <p className="text-white/50 text-xs tracking-widest uppercase">Professional Trading Calculator</p>
-        </div>
-        
-        {/* Tabs */}
-        <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
-                activeTab === tab.id 
-                  ? 'bg-amber-500/20 border border-amber-500/50 text-amber-400 shadow-lg shadow-amber-500/10' 
-                  : 'bg-white/5 border border-white/10 text-white/60 hover:bg-white/10'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        
-        {/* Currency Pair Selector */}
-        <div className="mb-4">
-          <label className="block text-xs text-white/60 mb-2 font-medium">Currency Pair</label>
-          <div className="grid grid-cols-3 gap-2">
-            {CURRENCY_PAIRS.slice(0, 6).map((pair) => (
-              <button
-                key={pair.symbol}
-                onClick={() => setSelectedPair(pair)}
-                className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl text-xs transition-all ${
-                  selectedPair.symbol === pair.symbol
-                    ? 'bg-amber-500/20 border border-amber-500/50 text-white'
-                    : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'
-                }`}
-              >
-                <span>{pair.flag1}{pair.flag2}</span>
-                <span className="font-semibold text-[10px]">{pair.symbol}</span>
-              </button>
-            ))}
+        <header className="flex justify-between items-center mb-10">
+          <div>
+            <h1 className="text-4xl md:text-5xl tracking-wide">
+              <span className="gold-text-shimmer">FOREX</span> <span className="text-slate-100">ELITE</span>
+            </h1>
+            <p className="text-slate-400 text-sm md:text-base tracking-widest uppercase mt-1">Professional Risk Terminal</p>
+          </div>
+          <div className="hidden md:flex items-center space-x-2 text-xs text-slate-500 glass-panel px-3 py-1.5 rounded-full">
+             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+             <span>SYSTEM OPERATIONAL</span>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+          
+          {/* --- LEFT COLUMN: Calculator --- */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="glass-panel p-6 rounded-3xl border-t border-slate-700/50">
+              <div className="flex items-center space-x-2 mb-6">
+                <Activity className="text-amber-500 w-5 h-5" />
+                <h2 className="text-2xl text-slate-200">Position Sizing</h2>
+              </div>
+
+              {/* Account Balance */}
+              <div className="mb-6 group">
+                <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold group-focus-within:text-amber-500 transition-colors">Account Balance (USD)</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5 group-focus-within:text-amber-500 transition-colors" />
+                  <input 
+                    type="number" 
+                    value={accountBalance}
+                    onChange={(e) => setAccountBalance(Number(e.target.value))}
+                    className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-4 pl-12 pr-4 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono text-lg"
+                  />
+                </div>
+              </div>
+
+              {/* Risk Percentage */}
+              <div className="mb-8">
+                <div className="flex justify-between text-xs uppercase tracking-wider mb-3">
+                  <label className="text-slate-400 font-semibold">Risk Per Trade</label>
+                  <span className="text-amber-500 font-bold">{riskPercentage}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0.1" 
+                  max="10" 
+                  step="0.1" 
+                  value={riskPercentage}
+                  onChange={(e) => setRiskPercentage(Number(e.target.value))}
+                  className="custom-range w-full appearance-none bg-transparent"
+                />
+                <div className="flex justify-between text-[10px] text-slate-600 mt-2 font-mono">
+                  <span>CONSERVATIVE (1%)</span>
+                  <span>AGGRESSIVE (5%+)</span>
+                </div>
+              </div>
+
+              {/* Pair & Stop Loss Row */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Asset Pair</label>
+                  <div className="relative">
+                    <select 
+                      value={selectedPair}
+                      onChange={(e) => setSelectedPair(e.target.value)}
+                      className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 px-4 text-white appearance-none focus:outline-none focus:border-amber-500/50 font-bold tracking-wide"
+                    >
+                      {CURRENCY_PAIRS.map(cp => (
+                        <option key={cp.pair} value={cp.pair}>{cp.pair}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">▼</div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2 font-semibold">Stop Loss (Pips)</label>
+                  <div className="relative group">
+                    <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4 group-focus-within:text-amber-500 transition-colors" />
+                    <input 
+                      type="number" 
+                      value={stopLoss}
+                      onChange={(e) => setStopLoss(Number(e.target.value))}
+                      className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 pl-10 pr-3 text-white focus:outline-none focus:border-amber-500/50 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Manual Update & Error */}
+              <div className="flex justify-between items-center mt-8 pt-4 border-t border-slate-800">
+                <div className="text-[10px] text-slate-500">
+                  {loading ? 'SYNCING MARKET DATA...' : `RATES UPDATED: ${lastUpdated || 'Never'}`}
+                </div>
+                <button 
+                  onClick={fetchRates}
+                  disabled={loading}
+                  className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-amber-500 transition-all hover:rotate-180 disabled:opacity-50"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+              {error && <div className="text-red-400 text-xs mt-2 flex items-center"><AlertTriangle className="w-3 h-3 mr-1"/> {error}</div>}
+            </div>
+
+            {/* Quick Tips */}
+            <div className="glass-panel p-5 rounded-2xl border-l-4 border-amber-500/50">
+              <h3 className="text-amber-500 font-display text-lg mb-1">PRO TRADER TIP</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Always set your stop loss based on market structure (support/resistance), not just a fixed number of pips. Let the chart dictate the risk, then adjust your lot size.
+              </p>
+            </div>
+          </div>
+
+          {/* --- RIGHT COLUMN: Results & Chart --- */}
+          <div className="lg:col-span-8 space-y-6">
+            
+            {/* Results Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard 
+                label="Position Size (Standard)" 
+                value={calculations ? calculations.standardLots.toFixed(2) : '0.00'} 
+                subtext={`${calculations ? calculations.units.toLocaleString() : '0'} Units`}
+                highlight={true}
+                icon={TrendingUp}
+              />
+              <StatCard 
+                label="Money at Risk" 
+                value={calculations ? `$${calculations.riskAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '$0.00'} 
+                subtext={`${riskPercentage}% of Balance`}
+                icon={AlertTriangle}
+              />
+              <StatCard 
+                label="Pip Value (Standard)" 
+                value={calculations ? `$${calculations.pipValueStandard.toFixed(2)}` : '$0.00'} 
+                subtext={`Per 1.0 Lot`}
+                icon={DollarSign}
+              />
+            </div>
+            
+             {/* Secondary Lot Sizes */}
+            <div className="glass-panel p-4 rounded-2xl flex justify-around items-center text-center">
+                <div>
+                    <div className="text-slate-500 text-[10px] uppercase tracking-wider mb-1">MINI LOTS (0.1)</div>
+                    <div className="text-xl font-mono text-white">{calculations ? calculations.miniLots.toFixed(2) : '0.00'}</div>
+                </div>
+                <div className="w-px h-10 bg-slate-700/50"></div>
+                <div>
+                    <div className="text-slate-500 text-[10px] uppercase tracking-wider mb-1">MICRO LOTS (0.01)</div>
+                    <div className="text-xl font-mono text-white">{calculations ? calculations.microLots.toFixed(2) : '0.00'}</div>
+                </div>
+                <div className="w-px h-10 bg-slate-700/50"></div>
+                <div>
+                    <div className="text-slate-500 text-[10px] uppercase tracking-wider mb-1">LIVE RATE</div>
+                    <div className="text-xl font-mono text-amber-400">{calculations ? calculations.rate.toFixed(5) : '---'}</div>
+                </div>
+            </div>
+
+            {/* TradingView Chart Embed */}
+            <div className="glass-panel p-1 rounded-3xl overflow-hidden h-[450px] md:h-[500px] border-slate-700/50 shadow-2xl relative">
+              <div className="absolute top-4 left-4 z-0 flex items-center space-x-2">
+                 <BarChart2 className="w-4 h-4 text-slate-500" />
+                 <span className="text-xs font-bold text-slate-500 tracking-widest">LIVE MARKET DATA // {selectedPair}</span>
+              </div>
+              <iframe
+                title="TradingView Chart"
+                src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=FX:${selectedPair}&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=1&saveimage=0&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart&utm_term=FX:${selectedPair}`}
+                className="w-full h-full rounded-2xl"
+                allowTransparency="true"
+                frameBorder="0"
+              />
+            </div>
+
           </div>
         </div>
         
-        {/* Tab Content */}
-        <div className="glass-card rounded-2xl p-5 shadow-2xl">
-          {activeTab === 'position' && (
-            <div className="slide-in">
-              <h2 className="text-lg font-bold mb-1">📐 Position Size Calculator</h2>
-              <p className="text-xs text-white/50 mb-5">Calculate optimal lot size based on your risk</p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">💼 Account Balance ($)</label>
-                  <input
-                    type="number"
-                    value={accountBalance}
-                    onChange={(e) => setAccountBalance(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white text-base"
-                    inputMode="decimal"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">⚠️ Risk Percentage (%)</label>
-                  <input
-                    type="number"
-                    value={riskPercent}
-                    onChange={(e) => setRiskPercent(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white text-base mb-2"
-                    step="0.5"
-                    inputMode="decimal"
-                  />
-                  <div className="flex gap-2">
-                    {[1, 2, 3].map((v) => (
-                      <button
-                        key={v}
-                        onClick={() => setRiskPercent(v)}
-                        className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                          riskPercent === v 
-                            ? 'bg-amber-500/30 border border-amber-500/60 text-amber-400' 
-                            : 'bg-white/5 border border-white/10 text-white/60'
-                        }`}
-                      >
-                        {v}%
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">🛑 Stop Loss (Pips)</label>
-                  <input
-                    type="number"
-                    value={stopLossPips}
-                    onChange={(e) => setStopLossPips(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white text-base"
-                    inputMode="numeric"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">⚡ Leverage</label>
-                  <div className="flex gap-2">
-                    {[50, 100, 200, 500].map((v) => (
-                      <button
-                        key={v}
-                        onClick={() => setLeverage(v)}
-                        className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${
-                          leverage === v 
-                            ? 'bg-amber-500/30 border border-amber-500/60 text-amber-400' 
-                            : 'bg-white/5 border border-white/10 text-white/60'
-                        }`}
-                      >
-                        1:{v}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Results */}
-              <div className="grid grid-cols-2 gap-3 mt-6">
-                <div className="bg-black/20 rounded-xl p-4 text-center">
-                  <span className="block text-[10px] text-white/50 uppercase tracking-wider mb-1">Risk Amount</span>
-                  <span className="block text-base font-bold">${riskAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/20 border border-amber-500/30 rounded-xl p-4 text-center">
-                  <span className="block text-[10px] text-white/50 uppercase tracking-wider mb-1">Lot Size</span>
-                  <span className="block text-2xl font-bold text-amber-400" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>{positionSize.toFixed(2)}</span>
-                </div>
-                <div className="bg-black/20 rounded-xl p-4 text-center">
-                  <span className="block text-[10px] text-white/50 uppercase tracking-wider mb-1">Units</span>
-                  <span className="block text-base font-bold">{unitsToTrade.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                </div>
-                <div className="bg-black/20 rounded-xl p-4 text-center">
-                  <span className="block text-[10px] text-white/50 uppercase tracking-wider mb-1">Margin</span>
-                  <span className="block text-base font-bold">${marginRequired.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {activeTab === 'rr' && (
-            <div className="slide-in">
-              <h2 className="text-lg font-bold mb-1">⚖️ Risk/Reward Calculator</h2>
-              <p className="text-xs text-white/50 mb-5">Evaluate your trade setup before entering</p>
-              
-              {/* Direction Toggle */}
-              <div className="flex gap-3 mb-5">
-                <button
-                  onClick={() => setTradeDirection('long')}
-                  className={`flex-1 py-3.5 rounded-xl font-bold text-sm transition-all border-2 ${
-                    tradeDirection === 'long'
-                      ? 'bg-green-500/20 border-green-500/60 text-green-400'
-                      : 'bg-white/5 border-white/10 text-white/50'
-                  }`}
-                >
-                  📈 LONG
-                </button>
-                <button
-                  onClick={() => setTradeDirection('short')}
-                  className={`flex-1 py-3.5 rounded-xl font-bold text-sm transition-all border-2 ${
-                    tradeDirection === 'short'
-                      ? 'bg-red-500/20 border-red-500/60 text-red-400'
-                      : 'bg-white/5 border-white/10 text-white/50'
-                  }`}
-                >
-                  📉 SHORT
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">🎯 Entry Price</label>
-                  <input
-                    type="number"
-                    value={entryPrice}
-                    onChange={(e) => setEntryPrice(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white text-base"
-                    step="0.0001"
-                    inputMode="decimal"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">🛑 Stop Loss Price</label>
-                  <input
-                    type="number"
-                    value={stopLossPrice}
-                    onChange={(e) => setStopLossPrice(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-black/30 border border-red-500/30 rounded-xl text-white text-base"
-                    step="0.0001"
-                    inputMode="decimal"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">💰 Take Profit Price</label>
-                  <input
-                    type="number"
-                    value={takeProfitPrice}
-                    onChange={(e) => setTakeProfitPrice(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-black/30 border border-green-500/30 rounded-xl text-white text-base"
-                    step="0.0001"
-                    inputMode="decimal"
-                  />
-                </div>
-              </div>
-              
-              {/* RR Visual Bar */}
-              <div className="mt-5 mb-4">
-                <div className="flex h-10 rounded-xl overflow-hidden bg-black/30">
-                  <div 
-                    className="flex items-center justify-center bg-gradient-to-r from-red-500 to-red-600 text-white text-[11px] font-semibold px-2"
-                    style={{ width: `${Math.min(riskPips / (riskPips + rewardPips) * 100, 100)}%`, minWidth: '70px' }}
-                  >
-                    Risk: {riskPips.toFixed(1)}p
-                  </div>
-                  <div 
-                    className="flex items-center justify-center bg-gradient-to-r from-green-500 to-green-600 text-white text-[11px] font-semibold px-2"
-                    style={{ width: `${Math.min(rewardPips / (riskPips + rewardPips) * 100, 100)}%`, minWidth: '70px' }}
-                  >
-                    Reward: {rewardPips.toFixed(1)}p
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/20 border border-amber-500/30 rounded-xl p-4 text-center col-span-2">
-                  <span className="block text-[10px] text-white/50 uppercase tracking-wider mb-1">Risk:Reward Ratio</span>
-                  <span className="block text-3xl font-bold text-amber-400" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>1:{rrRatio.toFixed(2)}</span>
-                </div>
-                <div className="bg-black/20 rounded-xl p-4 text-center">
-                  <span className="block text-[10px] text-white/50 uppercase tracking-wider mb-1">Breakeven Win Rate</span>
-                  <span className="block text-base font-bold">{breakEvenWinRate.toFixed(1)}%</span>
-                </div>
-                <div className={`rounded-xl p-4 text-center ${
-                  rrRatio >= 2 ? 'bg-green-500/20' : rrRatio >= 1 ? 'bg-amber-500/20' : 'bg-red-500/20'
-                }`}>
-                  <span className="block text-[10px] text-white/50 uppercase tracking-wider mb-1">Trade Quality</span>
-                  <span className={`block text-sm font-bold ${
-                    rrRatio >= 2 ? 'text-green-400' : rrRatio >= 1 ? 'text-amber-400' : 'text-red-400'
-                  }`}>
-                    {rrRatio >= 2 ? '🔥 EXCELLENT' : rrRatio >= 1.5 ? '👍 GOOD' : rrRatio >= 1 ? '⚠️ FAIR' : '❌ POOR'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {activeTab === 'pip' && (
-            <div className="slide-in">
-              <h2 className="text-lg font-bold mb-1">💰 Pip Value Calculator</h2>
-              <p className="text-xs text-white/50 mb-5">Calculate monetary value of each pip</p>
-              
-              <div className="mb-4">
-                <label className="block text-xs text-white/60 mb-2">📦 Lot Size</label>
-                <input
-                  type="number"
-                  value={pipLotSize}
-                  onChange={(e) => setPipLotSize(Number(e.target.value))}
-                  className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white text-base"
-                  step="0.01"
-                  inputMode="decimal"
-                />
-              </div>
-              
-              <div className="grid grid-cols-3 gap-2 mb-5">
-                {LOT_SIZES.map((lot) => (
-                  <button
-                    key={lot.label}
-                    onClick={() => setPipLotSize(parseFloat(lot.label))}
-                    className={`flex flex-col items-center gap-1 py-3 rounded-xl transition-all ${
-                      pipLotSize === parseFloat(lot.label)
-                        ? 'bg-amber-500/30 border border-amber-500/60 text-white'
-                        : 'bg-white/5 border border-white/10 text-white/70'
-                    }`}
-                  >
-                    <span className="text-xs font-semibold">{lot.name}</span>
-                    <span className="text-[10px] text-white/50">{lot.value.toLocaleString()} units</span>
-                  </button>
-                ))}
-              </div>
-              
-              <div className="flex items-center gap-4 bg-gradient-to-r from-amber-500/15 to-amber-600/10 border border-amber-500/30 rounded-2xl p-5 mb-5">
-                <div className="text-4xl">💵</div>
-                <div>
-                  <span className="block text-xs text-white/60 mb-1">Pip Value for {selectedPair.symbol}</span>
-                  <span className="block text-3xl font-bold text-amber-400" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-                    ${(pipLotSize * (selectedPair.pipDecimal === 4 ? 10 : 10)).toFixed(2)}
-                  </span>
-                  <span className="text-[10px] text-white/40">per pip movement</span>
-                </div>
-              </div>
-              
-              <div className="bg-black/20 rounded-xl overflow-hidden">
-                {[10, 50, 100].map((pips) => (
-                  <div key={pips} className="flex justify-between px-4 py-3.5 border-b border-white/5 last:border-0">
-                    <span className="text-sm text-white/70">{pips} pips</span>
-                    <span className="text-sm font-semibold text-green-400">
-                      ${(pipLotSize * (selectedPair.pipDecimal === 4 ? 10 : 10) * pips).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {activeTab === 'pnl' && (
-            <div className="slide-in">
-              <h2 className="text-lg font-bold mb-1">📊 Profit/Loss Calculator</h2>
-              <p className="text-xs text-white/50 mb-5">Calculate potential P/L on your trade</p>
-              
-              <div className="flex gap-3 mb-5">
-                <button
-                  onClick={() => setPlDirection('long')}
-                  className={`flex-1 py-3.5 rounded-xl font-bold text-sm transition-all border-2 ${
-                    plDirection === 'long'
-                      ? 'bg-green-500/20 border-green-500/60 text-green-400'
-                      : 'bg-white/5 border-white/10 text-white/50'
-                  }`}
-                >
-                  📈 LONG
-                </button>
-                <button
-                  onClick={() => setPlDirection('short')}
-                  className={`flex-1 py-3.5 rounded-xl font-bold text-sm transition-all border-2 ${
-                    plDirection === 'short'
-                      ? 'bg-red-500/20 border-red-500/60 text-red-400'
-                      : 'bg-white/5 border-white/10 text-white/50'
-                  }`}
-                >
-                  📉 SHORT
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">🎯 Entry Price</label>
-                  <input
-                    type="number"
-                    value={plEntryPrice}
-                    onChange={(e) => setPlEntryPrice(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white text-base"
-                    step="0.0001"
-                    inputMode="decimal"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">🏁 Exit Price</label>
-                  <input
-                    type="number"
-                    value={plExitPrice}
-                    onChange={(e) => setPlExitPrice(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white text-base"
-                    step="0.0001"
-                    inputMode="decimal"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs text-white/60 mb-2">📦 Lot Size</label>
-                  <input
-                    type="number"
-                    value={plLotSize}
-                    onChange={(e) => setPlLotSize(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white text-base"
-                    step="0.01"
-                    inputMode="decimal"
-                  />
-                </div>
-              </div>
-              
-              <div className={`relative mt-6 p-8 rounded-2xl text-center border ${
-                profitLoss >= 0 ? 'bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20' : 'bg-gradient-to-br from-red-500/10 to-red-600/5 border-red-500/20'
-              }`}>
-                <div className={`absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center text-xl ${
-                  profitLoss >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'
-                }`}>
-                  {profitLoss >= 0 ? '🚀' : '📉'}
-                </div>
-                <div className={`text-5xl font-bold ${profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`} style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-                  {profitLoss >= 0 ? '+' : ''}{profitLoss.toFixed(2)}
-                  <span className="text-lg text-white/50 ml-2">USD</span>
-                </div>
-                <div className="text-white/60 mt-2">
-                  {plPips >= 0 ? '+' : ''}{plPips.toFixed(1)} pips
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {activeTab === 'chart' && (
-            <div className="slide-in">
-              <h2 className="text-lg font-bold mb-1">📈 Live Chart Preview</h2>
-              <p className="text-xs text-white/50 mb-4">{selectedPair.flag1}{selectedPair.flag2} {selectedPair.symbol} - Simulated Data</p>
-              
-              <div className="bg-black/30 rounded-2xl p-4 mb-4 overflow-hidden">
-                <canvas
-                  ref={canvasRef}
-                  width={340}
-                  height={200}
-                  className="w-full h-auto rounded-lg"
-                />
-              </div>
-              
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="bg-black/20 rounded-xl p-3 text-center">
-                  <span className="block text-[9px] text-white/50 uppercase mb-1">Current</span>
-                  <span className="block text-sm font-semibold">
-                    {chartData.length > 0 ? chartData[chartData.length - 1].close.toFixed(selectedPair.pipDecimal) : '-'}
-                  </span>
-                </div>
-                <div className="bg-black/20 rounded-xl p-3 text-center">
-                  <span className="block text-[9px] text-white/50 uppercase mb-1">High</span>
-                  <span className="block text-sm font-semibold text-green-400">
-                    {chartData.length > 0 ? Math.max(...chartData.map(d => d.high)).toFixed(selectedPair.pipDecimal) : '-'}
-                  </span>
-                </div>
-                <div className="bg-black/20 rounded-xl p-3 text-center">
-                  <span className="block text-[9px] text-white/50 uppercase mb-1">Low</span>
-                  <span className="block text-sm font-semibold text-red-400">
-                    {chartData.length > 0 ? Math.min(...chartData.map(d => d.low)).toFixed(selectedPair.pipDecimal) : '-'}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="text-[11px] text-center text-white/40 bg-amber-500/10 rounded-lg p-2">
-                ⚠️ Simulated data for visualization. Connect to real feed for live trading.
-              </div>
-            </div>
-          )}
-        </div>
-        
         {/* Footer */}
-        <div className="text-center mt-6 text-white/40 text-xs">
-          <p>⚡ Built for serious traders</p>
-          <p className="text-amber-500/60 text-[10px] mt-2">Trading involves substantial risk. Trade responsibly.</p>
+        <div className="mt-12 text-center border-t border-slate-800 pt-8">
+           <p className="text-slate-600 text-xs">
+             MARKET DATA PROVIDED BY FRANKFURTER API • CHARTS BY TRADINGVIEW • <span className="text-amber-600">TRADE RESPONSIBLY</span>
+           </p>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default ForexEliteApp;
+
